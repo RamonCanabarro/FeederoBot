@@ -1,4 +1,5 @@
 import sqlite3
+import json
 import sys
 import time
 import telepot
@@ -6,8 +7,8 @@ import feedparser
 from telepot.loop import MessageLoop
 from telepot.namedtuple import InlineKeyboardMarkup, InlineKeyboardButton
 
+ 
 def on_list_command(msg):
-
     conn=sqlite3.connect('feed.db')
     text, chat_type, chat_id = telepot.glance(msg)
     bot = telepot.Bot(TOKEN)
@@ -22,25 +23,56 @@ def on_list_command(msg):
     if(not exist):
         bot.sendMessage('Não há registros.')
     else:
-        for post in range(3):
-            bot.sendMessage(chat_id, post +("---") + exist[post])
-        return 0
+        cont = 0
+        for post in exist:
+            cont+=1            
+            bot.sendMessage(chat_id,  (str(cont)+ " ---- " + json.dumps(post)))
+
+def on_add_command(msg):
+    conn = sqlite3.connect('feed.db')
+    text, chat_type, chat_id = telepot.glance(msg)
+    bot = telepot.Bot(TOKEN)
+    bot.sendMessage(chat_id, 'Mande link um RSS.')
+    
+    link = bot.getUpdates()
+    feed =  (link[0]['message']['text'])    
+    
+    is_bozo(msg,feed)
+
+    sql = 'SELECT link FROM feed WHERE user = ?'
+    curs = conn.cursor()
+    id = (chat_id,)
+    curs.execute(sql, id)
+    exist = (curs.fetchone())
+    if ((not exist) or ((exist[0] == str(chat_id)) and (exist[1] == feed) )):
+      for post in range(3):
+        
+        bot.sendMessage(chat_id, noticia.entries[post].title + ": " + noticia.href + "")
+        sql = ''' INSERT INTO feed(titulo,descricao,link) VALUES(?,?,?)'''
+
+def is_bozo(msg , feed):
+    text, chat_type, chat_id = telepot.glance(msg)
+    bot = telepot.Bot(TOKEN)
+    if (feed.bozo == 1):
+        bot.sendMessage(chat_id,'Favor enviar um link válido.')
 
 def on_chat_message(msg):
     conn=sqlite3.connect('feed.db')
-
     text, chat_type, chat_id = telepot.glance(msg)
     bot = telepot.Bot(TOKEN)
     link = bot.getUpdates()
     feed =  (link[0]['message']['text'])
 
+    # READS AND REDIRECTS ALL COMMANDS GIVEN --------------------------------------------------------
     if ('/' in  feed):
         mensagem = (feed[1:8])        
         if(mensagem == 'listar'):
-            print (on_list_command(msg))
-
+            on_list_command(msg)
+        elif(mensagem == 'add'):    
+            on_add_command(msg)    
 
     noticia = feedparser.parse(feed)
+    is_bozo(msg,noticia)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
                    [InlineKeyboardButton(text='Clique aqui para mais', callback_data='press')],
                ])
@@ -50,15 +82,22 @@ def on_chat_message(msg):
     curs.execute(sql, id)
     exist = (curs.fetchone())
     
+    
     if ((not exist) or ((exist[0] == str(chat_id)) and (exist[1] == feed) )):
       for post in range(3):
-        bot.sendMessage(chat_id, noticia.entries[post].title + ": " + noticia.entries[post].link + "")
+        
+        bot.sendMessage(chat_id, noticia.entries[post].title + ": " + noticia.href + "")
         sql = ''' INSERT INTO feed(titulo,descricao,link,user) VALUES(?,?,?,?)'''        
-    else:    
-      bot.sendMessage(chat_id, noticia.entries[0].title + ": " + noticia.entries[0].link + "")
-      sql='''UPDATE feed set titulo=?, descricao=?, link=? where user=?'''
-      
-    params =  (noticia['feed']['title'],noticia.entries[0].title, noticia['feed']['link'], chat_id)   
+    else:
+        
+        bot.sendMessage(chat_id, noticia.entries[0].title + ": " + noticia.entries[0].link + "")
+        sql='''UPDATE feed set titulo=?, descricao=?, link=? where user=?'''
+    
+    print ('--------------------------------------------------------------------------------------')
+    print (noticia['href'])
+    params =  (noticia['href'],noticia.entries[0].title, noticia['href'], chat_id)   
+
+
 
     curs = conn.cursor()
     curs.execute(sql,params)
@@ -74,7 +113,7 @@ def on_callback_query(msg):
     bot.answerCallbackQuery(query_id, text=noticia['feed']['title'])
     
     
-TOKEN = 'YOUR TOKEN HERE'  # get token from command-line
+TOKEN = '369795767:AAETSPpMOQR25MJL1ts8pGQSphb96D2qJZU'  # get token from command-line
 
 bot = telepot.Bot(TOKEN)
 MessageLoop(bot, {'chat': on_chat_message,
